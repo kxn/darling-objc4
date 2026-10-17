@@ -141,6 +141,17 @@ SEL sel_getUid(const char *name) {
 }
 
 
+// Search the runtime's real selector registry without interning unknown names.
+// Apple objc4's implementation uses the same builtin lookup and selLock.
+SEL sel_lookUpByName(const char *name) {
+    if (!name) return (SEL)0;
+    SEL result = search_builtins(name);
+    if (result) return result;
+    mutex_locker_t lock(selLock);
+    auto it = namedSelectors.get().find(name);
+    return it == namedSelectors.get().end() ? (SEL)0 : (SEL)*it;
+}
+
 BOOL sel_isEqual(SEL lhs, SEL rhs)
 {
     return bool(lhs == rhs);

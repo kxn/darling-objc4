@@ -210,6 +210,10 @@ OBJC_EXPORT BOOL sel_isMapped(SEL _Nonnull sel)
 OBJC_EXPORT SEL _Nonnull sel_getUid(const char * _Nonnull str)
     OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
 
+/** Look up an existing selector without registering a new name. */
+OBJC_EXPORT SEL _Nullable sel_lookUpByName(const char * _Nullable name);
+
+
 typedef const void* objc_objectptr_t;
 
 

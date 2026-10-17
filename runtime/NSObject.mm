@@ -1440,14 +1440,14 @@ objc_object::rootRelease_underflow(bool performDealloc)
 NEVER_INLINE void
 objc_object::clearDeallocating_slow()
 {
-    ASSERT(isa.nonpointer  &&  (isa.weakly_referenced || isa.has_sidetable_rc));
+    ASSERT(isa().nonpointer  &&  (isa().weakly_referenced || isa().has_sidetable_rc));
 
     SideTable& table = SideTables()[this];
     table.lock();
-    if (isa.weakly_referenced) {
+    if (isa().weakly_referenced) {
         weak_clear_no_lock(&table.weak_table, (id)this);
     }
-    if (isa.has_sidetable_rc) {
+    if (isa().has_sidetable_rc) {
         table.refcnts.erase(this);
     }
     table.unlock();
@@ -1528,7 +1528,7 @@ objc_object::sidetable_moveExtraRC_nolock(size_t extra_rc,
                                           bool isDeallocating, 
                                           bool weaklyReferenced)
 {
-    ASSERT(!isa.nonpointer);        // should already be changed to raw pointer
+    ASSERT(!isa().nonpointer);        // should already be changed to raw pointer
     SideTable& table = SideTables()[this];
 
     size_t& refcntStorage = table.refcnts[this];
@@ -1552,7 +1552,7 @@ objc_object::sidetable_moveExtraRC_nolock(size_t extra_rc,
 bool 
 objc_object::sidetable_addExtraRC_nolock(size_t delta_rc)
 {
-    ASSERT(isa.nonpointer);
+    ASSERT(isa().nonpointer);
     SideTable& table = SideTables()[this];
 
     size_t& refcntStorage = table.refcnts[this];
@@ -1583,7 +1583,7 @@ objc_object::sidetable_addExtraRC_nolock(size_t delta_rc)
 objc_object::SidetableBorrow
 objc_object::sidetable_subExtraRC_nolock(size_t delta_rc)
 {
-    ASSERT(isa.nonpointer);
+    ASSERT(isa().nonpointer);
     SideTable& table = SideTables()[this];
 
     RefcountMap::iterator it = table.refcnts.find(this);
@@ -1607,7 +1607,7 @@ objc_object::sidetable_subExtraRC_nolock(size_t delta_rc)
 size_t 
 objc_object::sidetable_getExtraRC_nolock()
 {
-    ASSERT(isa.nonpointer);
+    ASSERT(isa().nonpointer);
     SideTable& table = SideTables()[this];
     RefcountMap::iterator it = table.refcnts.find(this);
     if (it == table.refcnts.end()) return 0;
@@ -1618,7 +1618,7 @@ objc_object::sidetable_getExtraRC_nolock()
 void
 objc_object::sidetable_clearExtraRC_nolock()
 {
-    ASSERT(isa.nonpointer);
+    ASSERT(isa().nonpointer);
     SideTable& table = SideTables()[this];
     RefcountMap::iterator it = table.refcnts.find(this);
     table.refcnts.erase(it);
@@ -1633,7 +1633,7 @@ id
 objc_object::sidetable_retain(bool locked)
 {
 #if SUPPORT_NONPOINTER_ISA
-    ASSERT(!isa.nonpointer);
+    ASSERT(!isa().nonpointer);
 #endif
     SideTable& table = SideTables()[this];
     
@@ -1652,7 +1652,7 @@ bool
 objc_object::sidetable_tryRetain()
 {
 #if SUPPORT_NONPOINTER_ISA
-    ASSERT(!isa.nonpointer);
+    ASSERT(!isa().nonpointer);
 #endif
     SideTable& table = SideTables()[this];
 
@@ -1749,7 +1749,7 @@ void
 objc_object::sidetable_setWeaklyReferenced_nolock()
 {
 #if SUPPORT_NONPOINTER_ISA
-    ASSERT(!isa.nonpointer);
+    ASSERT(!isa().nonpointer);
 #endif
   
     SideTable& table = SideTables()[this];
@@ -1765,7 +1765,7 @@ uintptr_t
 objc_object::sidetable_release(bool locked, bool performDealloc)
 {
 #if SUPPORT_NONPOINTER_ISA
-    ASSERT(!isa.nonpointer);
+    ASSERT(!isa().nonpointer);
 #endif
     SideTable& table = SideTables()[this];
 

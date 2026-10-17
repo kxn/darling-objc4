@@ -112,7 +112,13 @@ public:
 
 struct objc_object {
 private:
-    isa_t isa;
+    // Match newer objc4: a tagged id is not an aligned C++ object pointer.
+    // An isa_t member makes Clang infer alignment and fold away LSB-tag tests.
+    // Real heap objects still store the same word at offset zero.
+    char isa_storage[sizeof(isa_t)];
+
+    isa_t &isa() { return *reinterpret_cast<isa_t *>(isa_storage); }
+    const isa_t &isa() const { return *reinterpret_cast<const isa_t *>(isa_storage); }
 
 public:
 
@@ -238,6 +244,9 @@ private:
     bool sidetable_present();
 #endif
 };
+
+static_assert(sizeof(objc_object) == sizeof(isa_t), "objc object ISA word size changed");
+static_assert(alignof(objc_object) == 1, "tagged object pointers must not imply alignment");
 
 
 #if __OBJC2__
