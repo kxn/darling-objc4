@@ -28,6 +28,9 @@
 
 #include "objc-private.h"
 #include "objc-loadmethod.h"
+#if defined(DARLING) && __OBJC2__ && defined(__x86_64__)
+#include <mach/mach_vm.h>
+#endif
 #ifndef DARLING
 #include "objc-bp-assist.h"
 #endif
@@ -453,6 +456,81 @@ void objc_addLoadImageFunc(objc_func_loadImage _Nonnull func) {
 #include "objc-file-old.h"
 #endif
 
+#if defined(DARLING) && __OBJC2__ && defined(__x86_64__)
+// The older dyld seals SG_READ_ONLY segments before notifying libobjc.
+// Standalone, non-preoptimized images can still need selector/class/protocol
+// reference fixups there. Preserve each actual VM region's protection, expose
+// only non-executable data during _read_images, and restore it before callbacks.
+class DarlingDataConstWriteScope {
+    struct Change {
+        mach_vm_address_t address;
+        mach_vm_size_t size;
+        vm_prot_t protection;
+        Change *next;
+    };
+    Change *changes = nullptr;
+
+public:
+    DarlingDataConstWriteScope(header_info **headers, unsigned count) {
+        const mach_vm_size_t page = getpagesize();
+        for (unsigned i = 0; i < count; ++i) {
+            unsigned long length = 0;
+            uint8_t *data = getsegmentdata(headers[i]->mhdr(), "__DATA_CONST", &length);
+            if (!data || !length) continue;
+            mach_vm_address_t address = (mach_vm_address_t)data;
+            if (length > UINT64_MAX - address - (page - 1))
+                _objc_fatal("invalid __DATA_CONST extent");
+            mach_vm_address_t end = (address + length + page - 1) & ~(page - 1);
+            address &= ~(page - 1);
+            while (address < end) {
+                mach_vm_address_t region = address;
+                mach_vm_size_t size = 0;
+                vm_region_basic_info_data_64_t info;
+                mach_msg_type_number_t words = VM_REGION_BASIC_INFO_COUNT_64;
+                mach_port_t object = MACH_PORT_NULL;
+                kern_return_t status = mach_vm_region(mach_task_self(), &region,
+                    &size, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&info,
+                    &words, &object);
+                if (object != MACH_PORT_NULL)
+                    mach_port_deallocate(mach_task_self(), object);
+                if (status != KERN_SUCCESS || region > address || !size ||
+                    size > UINT64_MAX - region || region + size <= address)
+                    _objc_fatal("cannot inspect __DATA_CONST protection: %d", status);
+                mach_vm_size_t span = std::min(end, region + size) - address;
+                if (!(info.protection & VM_PROT_WRITE)) {
+                    if (!(info.protection & VM_PROT_READ) ||
+                        (info.protection & VM_PROT_EXECUTE) ||
+                        !(info.max_protection & VM_PROT_WRITE))
+                        _objc_fatal("__DATA_CONST cannot be made writable for fixups");
+                    Change *change = (Change *)malloc(sizeof(Change));
+                    if (!change) _objc_fatal("cannot record __DATA_CONST protection");
+                    *change = {address, span, info.protection, changes};
+                    status = mach_vm_protect(mach_task_self(), address, span,
+                        false, info.protection | VM_PROT_WRITE);
+                    if (status != KERN_SUCCESS)
+                        _objc_fatal("cannot open __DATA_CONST for fixups: %d", status);
+                    changes = change;
+                }
+                address += span;
+            }
+        }
+    }
+    ~DarlingDataConstWriteScope() {
+        while (changes) {
+            Change *change = changes;
+            kern_return_t status = mach_vm_protect(mach_task_self(),
+                change->address, change->size, false, change->protection);
+            if (status != KERN_SUCCESS)
+                _objc_fatal("cannot restore __DATA_CONST protection: %d", status);
+            changes = change->next;
+            free(change);
+        }
+    }
+    DarlingDataConstWriteScope(const DarlingDataConstWriteScope&) = delete;
+    DarlingDataConstWriteScope& operator=(const DarlingDataConstWriteScope&) = delete;
+};
+#endif
+
 void 
 map_images_nolock(unsigned mhCount, const char * const mhPaths[],
                   const struct mach_header * const mhdrs[])
@@ -595,6 +673,9 @@ map_images_nolock(unsigned mhCount, const char * const mhPaths[],
     }
 
     if (hCount > 0) {
+#if defined(DARLING) && __OBJC2__ && defined(__x86_64__)
+        DarlingDataConstWriteScope writableData(hList, hCount);
+#endif
         _read_images(hList, hCount, totalClasses, unoptimizedTotalClasses);
     }
 
