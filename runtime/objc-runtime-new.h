@@ -80,8 +80,9 @@
 #define RW_CONSTRUCTING       (1<<26)
 // class allocated and registered
 #define RW_CONSTRUCTED        (1<<25)
-// available for use; was RW_FINALIZE_ON_MAIN_THREAD
-// #define RW_24 (1<<24)
+// Class instances use _objc_initiateDealloc before -dealloc.
+// Keep the old class/cache layout: bit 24 is unused in this objc4 version.
+#define RW_HAS_CUSTOM_DEALLOC_INITIATION (1<<24)
 // class +load has been called
 #define RW_LOADED             (1<<23)
 #if !SUPPORT_NONPOINTER_ISA
@@ -1739,6 +1740,15 @@ struct objc_class : objc_object {
     void setInfo(uint32_t set) {
         ASSERT(isFuture()  ||  isRealized());
         data()->setFlags(set);
+    }
+
+    bool hasCustomDeallocInitiation() const {
+        return isRealized() &&
+            (data()->flags & RW_HAS_CUSTOM_DEALLOC_INITIATION);
+    }
+
+    void setHasCustomDeallocInitiation() {
+        setInfo(RW_HAS_CUSTOM_DEALLOC_INITIATION);
     }
 
     void clearInfo(uint32_t clear) {

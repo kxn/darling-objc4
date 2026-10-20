@@ -2297,6 +2297,10 @@ static void addSubclass(Class supercls, Class subcls)
             subcls->setHasCxxDtor();
         }
 
+        if (supercls->hasCustomDeallocInitiation()) {
+            subcls->setHasCustomDeallocInitiation();
+        }
+
         objc::AWZScanner::scanAddedSubClass(subcls, supercls);
         objc::RRScanner::scanAddedSubClass(subcls, supercls);
         objc::CoreScanner::scanAddedSubClass(subcls, supercls);
@@ -8515,6 +8519,21 @@ Class class_setSuperclass(Class cls, Class newSuper)
 {
     mutex_locker_t lock(runtimeLock);
     return setSuperclass(cls, newSuper);
+}
+
+// Port of Apple's objc4 custom-deallocation initiation API. The policy lives in
+// an unused class_rw_t flag instead of newer cache bits, preserving this ABI.
+void
+_class_setCustomDeallocInitiation(Class cls)
+{
+    if (cls->hasCustomDeallocInitiation()) return;
+
+    mutex_locker_t guard(runtimeLock);
+    cls = realizeClassMaybeSwiftAndLeaveLocked(cls, runtimeLock);
+    foreach_realized_class_and_subclass(cls, [](Class subclass) -> bool {
+        subclass->setHasCustomDeallocInitiation();
+        return true;
+    });
 }
 
 void runtime_init(void)

@@ -1758,6 +1758,17 @@ objc_object::sidetable_setWeaklyReferenced_nolock()
 }
 
 
+// Send the custom initiation message only after the reference-count path has
+// entered the deallocating state and released any side-table lock.
+void
+objc_object::performDealloc()
+{
+    if (ISA()->hasCustomDeallocInitiation())
+        ((void(*)(objc_object *, SEL))objc_msgSend)(this, @selector(_objc_initiateDealloc));
+    else
+        ((void(*)(objc_object *, SEL))objc_msgSend)(this, @selector(dealloc));
+}
+
 // rdar://20206767
 // return uintptr_t instead of bool so that the various raw-isa 
 // -release paths all return zero in eax
@@ -1785,7 +1796,7 @@ objc_object::sidetable_release(bool locked, bool performDealloc)
     }
     table.unlock();
     if (do_dealloc  &&  performDealloc) {
-        ((void(*)(objc_object *, SEL))objc_msgSend)(this, @selector(dealloc));
+        this->performDealloc();
     }
     return do_dealloc;
 }

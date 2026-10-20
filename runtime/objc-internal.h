@@ -278,6 +278,67 @@ objc_copyClassesForImage(const char * _Nonnull image,
     OBJC_AVAILABLE(10.16, 14.0, 14.0, 7.0, 4.0);
 
 
+/**
+ * Mark a class as having custom dealloc initiation.
+ *
+ * NOTE: if you adopt this function for something other than deallocating on the
+ * main thread, please let the runtime team know about it so we can be sure it
+ * will work properly for your use case.
+ *
+ * When this is set, the default NSObject implementation of `-release` will send
+ * the `_objc_initiateDealloc` message to instances of this class instead of
+ * `dealloc` when the refcount drops to zero. This gives the class the
+ * opportunity to customize how `dealloc` is invoked, for example by invoking it
+ * on the main thread instead of synchronously in the release call.
+ *
+ * A default implementation of `_objc_initiateDealloc` is not provided. Classes
+ * must implement their own.
+ *
+ * The implementation of `_objc_initiateDealloc` is expected to eventually call
+ * `[self dealloc]`. Note that once `_objc_initiateDealloc` is sent, the object
+ * is in a deallocating state. This means:
+ *
+ * 1. Retaining the object will NOT extend its lifetime.
+ * 2. Releasing the object will NOT cause another call to `dealloc` or
+ *    `_objc_initiateDealloc`.
+ * 3. Existing weak references to the object will produce `nil` when read.
+ * 4. Forming new weak references to the object is an error.
+ *
+ * Because the implementation of `_objc_initiateDealloc` will call
+ * `[self dealloc]`, it necessarily runs before any subclass overrides of
+ * `dealloc`. Overrides of `dealloc` often rely on the superclass state still
+ * being intact and usable, so ensure that `_objc_initiateDealloc` does not free
+ * resources that a subclass might still try to access. Most or all of your
+ * object teardown work should continue to be in `dealloc` to preserve the
+ * expected sequence of events.
+ *
+ * This call primarily exists to support classes which need to deallocate on the
+ * main thread. This can be accomplished by setting the class to use custom
+ * dealloc initiation, and then implementing `_objc_initiateDealloc` to call
+ * dealloc on the main thread. For example:
+ *
+ * ```
+ * _class_setCustomDeallocInitiation([MyClass class]);
+ *
+ * - (void)_objc_initiateDealloc {
+ *     if (pthread_main_np())
+ *         [self dealloc];
+ *     else
+ *         dispatch_async_f(dispatch_get_main_queue(), self,
+ *             _objc_deallocOnMainThreadHelper);
+ * }
+ * ```
+ *
+ * (We use `dispatch_async_f` to avoid an unsafe capture of `self` in a block,
+ * which could result in the object being released by Dispatch after being
+ * freed.)
+ *
+ * @param cls The class to modify.
+ */
+OBJC_EXPORT void
+_class_setCustomDeallocInitiation(_Nonnull Class cls);
+#define OBJC_SETCUSTOMDEALLOCINITIATION_DEFINED 1
+
 // Tagged pointer objects.
 
 #if __LP64__

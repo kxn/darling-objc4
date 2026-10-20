@@ -897,7 +897,7 @@ deallocate:
     __c11_atomic_thread_fence(__ATOMIC_ACQUIRE);
 
     if (performDealloc) {
-        ((void(*)(objc_object *, SEL))objc_msgSend)(this, @selector(dealloc));
+        this->performDealloc();
     }
     return true;
 }
@@ -921,6 +921,12 @@ inline id
 objc_object::rootAutorelease()
 {
     if (isTaggedPointer()) return (id)this;
+
+    // A custom initiation method may leave this object awaiting destruction on
+    // another thread. Do not enqueue a later release of that deferred object.
+    if (ISA()->hasCustomDeallocInitiation() && rootIsDeallocating())
+        return (id)this;
+
     if (prepareOptimizedReturn(ReturnAtPlus1)) return (id)this;
 
     return rootAutorelease2();
@@ -1188,6 +1194,12 @@ inline id
 objc_object::rootAutorelease()
 {
     if (isTaggedPointer()) return (id)this;
+
+    // A custom initiation method may leave this object awaiting destruction on
+    // another thread. Do not enqueue a later release of that deferred object.
+    if (ISA()->hasCustomDeallocInitiation() && rootIsDeallocating())
+        return (id)this;
+
     if (prepareOptimizedReturn(ReturnAtPlus1)) return (id)this;
 
     return rootAutorelease2();

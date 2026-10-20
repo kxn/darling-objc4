@@ -187,6 +187,8 @@ public:
 private:
     void initIsa(Class newCls, bool nonpointer, bool hasCxxDtor);
 
+    void performDealloc();
+
     // Slow paths for inline control
     id rootAutorelease2();
     uintptr_t overrelease_error();
