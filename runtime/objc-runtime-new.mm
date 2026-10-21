@@ -4312,6 +4312,32 @@ fixupProtocol(protocol_t *proto)
         }
     }
 
+    // Modern images may keep extended encodings in read-only __DATA_CONST.
+    // The legacy sorter permutes this table alongside all four method lists.
+    // Keep their original shared ordering in one protocol-owned writable copy.
+    if (const char **types = proto->extendedMethodTypes()) {
+        method_list_t *lists[] = {proto->instanceMethods, proto->classMethods,
+            proto->optionalInstanceMethods, proto->optionalClassMethods};
+        size_t count = 0;
+        bool needsSorting = false;
+        for (method_list_t *list : lists) {
+            if (!list) continue;
+            if (list->count > SIZE_MAX - count) {
+                _objc_fatal("protocol extended method type count overflow");
+            }
+            count += list->count;
+            needsSorting |= !list->isFixedUp() && !list->isSmallList() && list->count > 1;
+        }
+        if (needsSorting) {
+            if (count > SIZE_MAX / sizeof(*types)) {
+                _objc_fatal("protocol extended method type size overflow");
+            }
+            const char **copy = (const char **)memdup(types, count * sizeof(*types));
+            if (!copy) _objc_fatal("unable to copy protocol extended method types");
+            proto->_extendedMethodTypes = copy;
+        }
+    }
+
     fixupProtocolMethodList(proto, proto->instanceMethods, YES, YES);
     fixupProtocolMethodList(proto, proto->classMethods, YES, NO);
     fixupProtocolMethodList(proto, proto->optionalInstanceMethods, NO, YES);
