@@ -2185,6 +2185,18 @@ objc_retainAutoreleasedReturnValue(id obj)
     return objc_retain(obj);
 }
 
+#if defined(__x86_64__)
+// Apple objc4-951.1's +1 claim operation. On Intel the old optimized-return
+// helper uses only the TLS disposition; there is no expectsNOP argument.
+id
+objc_claimAutoreleasedReturnValue(id obj)
+{
+    if (acceptOptimizedReturn() == ReturnAtPlus1) return obj;
+
+    return objc_retain(obj);
+}
+#endif
+
 // Accept a value returned through a +0 autoreleasing convention for use at +0.
 id
 objc_unsafeClaimAutoreleasedReturnValue(id obj)

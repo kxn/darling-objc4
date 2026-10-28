@@ -950,6 +950,13 @@ OBJC_EXPORT id _Nullable
 objc_retainAutoreleasedReturnValue(id _Nullable obj)
     OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
 
+#if defined(__x86_64__)
+// Accept a value returned through a +0 autoreleasing convention for use at +1.
+OBJC_EXPORT id _Nullable
+objc_claimAutoreleasedReturnValue(id _Nullable obj)
+    OBJC_AVAILABLE(13.0, 16.0, 16.0, 9.0, 7.0);
+#endif
+
 // Accept a value returned through a +0 autoreleasing convention for use at +0.
 OBJC_EXPORT id _Nullable
 objc_unsafeClaimAutoreleasedReturnValue(id _Nullable obj)
